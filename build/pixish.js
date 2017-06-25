@@ -1,22 +1,32 @@
-// Namespace
+ // Namespace
+this.BD = this.BD || {};
 this.PIXI = this.PIXI || {};
 
 (function() {
 
     "use strict";
 
-    function PIXI(){
+    function P(){
 
+        // ------------- vars -------------
+        // needs : BASE_WIDTH, BD.canvasWidth, BD.SCALE
+        var globalScale = BD ? BD.SCALE || 1 : 1;
         var containerList = [];
-
         var ctx,
             canvas;
 
         var mouseDown,
             mouseDownX,
-            mouseDownY;
-        
-        this.Application = function(w, h, options) {
+            mouseDownY,
+            mouseUpX,
+            mouseUpY;
+
+        // ------------- constants -------------
+        var TO_RADIANS = Math.PI/180;
+        var TO_DEGREES = 180/Math.PI;
+
+        // ------------- constructors -------------
+        var Application = function(w, h, options) {
             canvas          = document.createElement(navigator.isCocoonJS ? "screencanvas" : "canvas");
             ctx             = canvas.getContext('2d');
             canvas.width    = w;
@@ -27,167 +37,66 @@ this.PIXI = this.PIXI || {};
                 }
             }
 
-            if (PIXI.useTouch()) {
-                document.addEventListener('touchstart', mouseDown);
-                document.addEventListener('touchend', PIXI.domouseup);
+            if (useTouch()) {
+                document.addEventListener('touchstart', onmousedown);
+                document.addEventListener('touchend', onmouseup);
                 //document.addEventListener('touchmove', _this.dotouchmove);
             } else {
                 canvas.onmousedown = function(e){
-                    mouseDown(e);
+                    onmousedown(e);
                 }
                 canvas.onmouseup = function(e){
-                    PIXI.mouseup(e);
+                    onmouseup(e);
                 }
             }
 
             return {
                 view        : canvas,
-                stage       : new PIXI.Container(),
-                ticker      : new PIXI.Ticker(),
-                render      : PIXI.redraw
+                stage       : new Container(),
+                ticker      : new Ticker(),
+                render      : redraw
             }
-        }
+        };
 
-        this.Container = function() {
-            var container = {
-                type            : 'container',
-                children        : [],
-                addChild        : PIXI.addChild,
-                removeChild     : PIXI.removeChild,
-                removeAll       : PIXI.removeAll,
-                x               : 0,
-                y               : 0,
-                position        : {x:0, y:0},
-                scale           : {x:1, y:1},
-                rotation        : 0,
-                alpha           : 1,
-                anchor          : new PIXI.Point(0, 0),
-            }
+        var Container = function() {
+            var container = Object.assign(genericObject(),{
+                    type            : 'container',
+                    children        : [],
+                    addChild        : addChild,
+                    removeChild     : removeChild,
+                    removeAll       : removeAll,
+                }
+            );
             containerList.push(container);
             return container;
         };
 
-        this.Sprite = function(texture) {
-            return {
-                type        : 'sprite',
-                texture     : texture,
-                x           : 0,
-                y           : 0,
-                position    : {x:0, y:0},
-                scale       : {x:1, y:1},
-                rotation    : 0,
-                alpha       : 1,
-                anchor      : new PIXI.Point(0, 0)
-            }
+        var Sprite = function(texture) {
+            return Object.assign(genericObject(),{
+                    type        : 'sprite',
+                    texture     : texture,
+                }
+            );
         };
 
-        this.useTouch = function () {
-            try {
-                document.createEvent("TouchEvent");
-                return true;
-            } catch (e) {
-                return false;
-            }
-        }
-
-        this.mousedown = function (evt) {
-            if (!evt) {
-                evt = window.event;
-            }
-            mouseDown  = true;
-            mouseDownX = PIXI.getMousePosition(evt).x*BD.SCALE;
-            mouseDownY = PIXI.getMousePosition(evt).y*BD.SCALE;
-            
-            // log('------------------------------------')
-            // log('BD.SCALE '+BD.SCALE)
-            // log('mouseDownX '+mouseDownX)
-            // log('mouseDownY '+mouseDownY)
-
-            var children = PIXI.getChildrenAtCoord(mouseDownX, mouseDownY);
-            for (var i in children){
-                if (children[i].mousedown){
-                    children[i].mousedown(children[i]);
-                }
-            }
-        };
-
-        this.mouseup = function (evt) {
-            mouseDown  = true;
-            PIXI.mouseUpX = PIXI.getMousePosition(evt).x*BD.SCALE;
-            PIXI.mouseUpY = PIXI.getMousePosition(evt).y*BD.SCALE;
-            var children = PIXI.getChildrenAtCoord(PIXI.mouseUpX, PIXI.mouseUpY);
-            for (var i in children){
-                if (children[i].mouseup){
-                    children[i].mouseup(children[i]);
-                }
-            }
-        }
-
-        this.getChildrenAtCoord = function (x, y) {
-            var arr = [];
-            for (var c in containerList) {
-                var container = containerList[c];
-                for (var i in container.children) {
-                    var child = container.children[i];
-                    //var anchorX = child.anchor.x*container.anchor.x;
-                    //var anchorY = child.anchor.y*container.anchor.y;
-                    var anchorX = 0.5; //container.anchor.x;
-                    var anchorY = 0.5; //container.anchor.y;
-                    if (x > (child.___x - child.___w * anchorX) &&
-                        x < (child.___x - child.___w * anchorX + child.___w) &&
-                        y > (child.___y - child.___h * anchorY) &&
-                        y < (child.___y - child.___h * anchorY + child.___h)
-                    ) {
-                        if (child.interactive) {
-                            arr.push(child)
-                        }
-                        if (container.interactive) {
-                            arr.push(container)
-                        }
-                    }
-                }
-            }
-            return arr;
-        };
-
-        this.getMousePosition = function (evt) {
-            var x;
-            var y;
-            if (PIXI.useTouch()) {
-                x    = evt.targetTouches[0].clientX;
-                y    = evt.targetTouches[0].clientY; // - $(window).scrollTop();
-                return {
-                    x: x,
-                    y: y
-                };
-            } else {
-                x    = (evt.clientX);
-                y    = (evt.clientY);
-                return {
-                    x: x,
-                    y: y
-                }
-            }
-        };
-
-        this.Texture = function(asset, bounds) {
+        var Texture = function(asset, bounds) {
             if (asset instanceof Image){
                 asset.bounds = bounds;
                 return asset;
             } else {
-                var asset = PIXI.Texture.fromImage(asset);
+                var asset = Texture.fromImage(asset);
                 asset.bounds = bounds;
                 return asset;
             }
         };
 
-        this.Texture.fromImage =  function(url) {
+        Texture.fromImage =  function(url) {
             var img = new Image();
             img.src = url;
             return img;
         };
-        
-        this.Point = function(x, y) {
+
+        var Point = function(x, y) {
             return {
                 type        : 'point',
                 x           : x,
@@ -195,7 +104,7 @@ this.PIXI = this.PIXI || {};
             }
         };
 
-        this.Rectangle = function(x, y, w, h) {
+        var Rectangle = function(x, y, w, h) {
             return {
                 type        : 'rectangle',
                 x           : x,
@@ -205,38 +114,26 @@ this.PIXI = this.PIXI || {};
             }
         };
 
-        this.Graphics = function() {
-            return {
-                type        : 'graphic',
-                x           : 0,
-                y           : 0,
-                position    : {x:0, y:0},
-                scale       : {x:1, y:1},
-                rotation    : 0,
-                alpha       : 1,
-                anchor      : new PIXI.Point(0, 0),
-                beginFill   : function(data){},
-                drawRect    : function(data){},
-                endFill     : function(data){},
-            }
+        var Graphics = function() {
+            return Object.assign(genericObject(),{
+                    type        : 'graphic',
+                    beginFill   : function(data){},
+                    drawRect    : function(data){},
+                    endFill     : function(data){}
+                }
+            );
         };
 
-        this.Text = function(txt, options) {
-            return {
-                type        : 'text',
-                text        : txt,
-                options     : options, //Object.assign({}, options),
-                x           : 0,
-                y           : 0,
-                position    : {x:0, y:0},
-                scale       : {x:1, y:1},
-                rotation    : 0,
-                alpha       : 1,
-                anchor      : new PIXI.Point(0, 0),
-            }
+        var Text = function(txt, options) {
+            return Object.assign(genericObject(),{
+                    type        : 'text',
+                    text        : txt,
+                    options     : Object.assign({}, options),
+                }
+            );
         };
 
-        this.Ticker = function() {
+        var Ticker = function() {
             var tickerList = [];
             function tick() {
                 for (var i in tickerList) {
@@ -253,27 +150,103 @@ this.PIXI = this.PIXI || {};
             }
         };
 
-        this.addChild = function(o) {
+        var addChild = function(o) {
             this.children.push(o);
             return o;
         }
 
-        this.removeChild = function(o) {
+        var removeChild = function(o) {
             if (o.type = "container"){
                 o.children = [];
             }
             this.children.splice(this.children.indexOf(o), 1);
         }
 
-        this.removeAll = function() {
+        var removeAll = function() {
             this.children = [];
         }
 
+        var onmousedown = function (evt) {
+            if (!evt) {
+                evt = window.event;
+            }
+            var p = getMousePosition(evt);
+            mouseDownX = p.x;
+            mouseDownY = p.y;
+            mouseDown  = true;
+            log('------------------------------------')
+            log('mouseDownX '+mouseDownX)
+            log('mouseDownY '+mouseDownY)
+            var children = getChildrenAtCoord(mouseDownX, mouseDownY);
+            for (var i in children){
+                if (children[i].mousedown){
+                    children[i].mousedown(children[i]);
+                }
+            }
+        };
 
-        var TO_RADIANS = Math.PI/180;
-        var TO_DEGREES = 180/Math.PI;
+        var onmouseup = function (evt) {
+            if (!evt) {
+                evt = window.event;
+            }
+            var p = getMousePosition(evt);
+            mouseUpX = p.x;
+            mouseUpY = p.y;
+            mouseDown  = true;
+            var children = getChildrenAtCoord(mouseUpX, mouseUpY);
+            for (var i in children){
+                if (children[i].mouseup){
+                    children[i].mouseup(children[i]);
+                }
+            }
+        }
 
-        this.redraw = function() {
+        var getChildrenAtCoord = function (x, y) {
+            var arr = [];
+            containerList.forEach(function(container){
+                container.children.forEach(function(child){
+                    var anchorX = child.anchor.x;
+                    var anchorY = child.anchor.y;
+                    if (x > (child.___x - child.___w * anchorX) &&
+                        x < (child.___x - child.___w * anchorX + child.___w) &&
+                        y > (child.___y - child.___h * anchorY) &&
+                        y < (child.___y - child.___h * anchorY + child.___h)
+                    ) {
+                        if (child.interactive) {
+                            arr = [child];
+                        }
+                        if (container.interactive) {
+                            arr = [container];
+                        }
+                    }
+                })
+            })
+            return arr;
+        };
+
+        var getMousePosition = function (evt) {
+            var xsc = BASE_WIDTH/BD.canvasWidth;
+            var ysc = BASE_HEIGHT/BD.canvasHeight;
+            var x;
+            var y;
+            if (useTouch()) {
+                x    = evt.targetTouches[0].clientX/globalScale*xsc;
+                y    = evt.targetTouches[0].clientY/globalScale*ysc; // - $(window).scrollTop();
+                return {
+                    x: x,
+                    y: y
+                };
+            } else {
+                x    = (evt.clientX)/globalScale*xsc;
+                y    = (evt.clientY)/globalScale*ysc;
+                return {
+                    x: x,
+                    y: y
+                }
+            }
+        };
+
+        var redraw = function() {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             for (var c in containerList){
                 var container = containerList[c];
@@ -299,7 +272,7 @@ this.PIXI = this.PIXI || {};
                         o.___h = h;
                         if (o.type == "sprite") {
                             if (o.texture) {
-                                PIXI.drawRotatedImage(o, x, y, w, h, r, alpha);
+                                drawRotatedImage(o, x, y, w, h, r, alpha);
                             }
                         } else if (o.type == "text") {
                             ctx.font = o.options.font; //
@@ -313,7 +286,7 @@ this.PIXI = this.PIXI || {};
             }
         };
 
-        this.drawRotatedImage = function(obj, x, y, w, h, angle, alpha){
+        var drawRotatedImage = function(obj, x, y, w, h, angle, alpha){
             if (obj.texture && w && h){
                 ctx.save();
                 ctx.globalAlpha = alpha;
@@ -342,8 +315,8 @@ this.PIXI = this.PIXI || {};
         
         var loadSingle = function (){
             var d = loadarr.pop();
-            this[d.name] = new Image();
-            this[d.name].onload = function(evt) {
+            window[d.name] = new Image();
+            window[d.name].onload = function(evt) {
                 if (loadarr.length>0){
                     onProgress({progress:loadarr.length}); // needs progress
                     loadSingle();
@@ -351,7 +324,7 @@ this.PIXI = this.PIXI || {};
                     onComplete(evt);
                 }
             };
-            this[d.name].onerror = function(evt) {
+            window[d.name].onerror = function(evt) {
                 if (loadarr.length>0){
                     onProgress(evt); // needs progress
                     loadSingle();
@@ -359,10 +332,10 @@ this.PIXI = this.PIXI || {};
                     onComplete(evt);
                 }
             };
-            this[d.name].src = d.url;
+            window[d.name].src = d.url;
         };
 
-        this.loader = {
+        var loader = {
             add: function(name, url) {
                 loadarr.push({name:name, url:url})
             },
@@ -376,10 +349,52 @@ this.PIXI = this.PIXI || {};
                 loadSingle();
             }
         };
-        
+
+        // ----------------------------
+        // ----- HELPERS ---------------
+        // ----------------------------
+        var useTouch = function () {
+            try {
+                document.createEvent("TouchEvent");
+                return true;
+            } catch (e) {
+                return false;
+            }
+        };
+
+        var genericObject = function () {
+            return {
+                x           : 0,
+                y           : 0,
+                position    : {x:0, y:0},
+                scale       : {x:1, y:1},
+                rotation    : 0,
+                alpha       : 1,
+                anchor      : new Point(0, 0)
+            }
+        };
+
+        // ----- PUBLIC ---------------
+        this.Application    = Application;
+        this.Container      = Container;
+        this.Sprite         = Sprite;
+        this.Texture        = Texture;
+        this.Point          = Point;
+        this.Rectangle      = Rectangle;
+        this.Graphics       = Graphics;
+        this.Text           = Text;
+        this.Ticker         = Ticker;
+        this.loader         = loader;
+
+        this.addChild       = addChild;
+        this.removeChild    = removeChild;
+        this.removeAll      = removeAll;
+
+
+        return this;
     }
     
-    BD.PIXI = PIXI();
+    PIXI = new P();
 
 }());
 
