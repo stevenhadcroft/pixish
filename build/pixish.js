@@ -74,7 +74,7 @@ this.PIXI = this.PIXI || {};
         var Sprite = function(texture) {
             return Object.assign(genericObject(),{
                     type        : 'sprite',
-                    texture     : texture,
+                    texture     : texture
                 }
             );
         };
@@ -156,7 +156,7 @@ this.PIXI = this.PIXI || {};
         }
 
         var removeChild = function(o) {
-            if (o.type = "container"){
+            if (o.type == "container"){
                 o.children = [];
             }
             this.children.splice(this.children.indexOf(o), 1);
@@ -174,9 +174,6 @@ this.PIXI = this.PIXI || {};
             mouseDownX = p.x;
             mouseDownY = p.y;
             mouseDown  = true;
-            log('------------------------------------')
-            log('mouseDownX '+mouseDownX)
-            log('mouseDownY '+mouseDownY)
             var children = getChildrenAtCoord(mouseDownX, mouseDownY);
             for (var i in children){
                 if (children[i].mousedown){
@@ -275,11 +272,13 @@ this.PIXI = this.PIXI || {};
                                 drawRotatedImage(o, x, y, w, h, r, alpha);
                             }
                         } else if (o.type == "text") {
-                            ctx.font = o.options.font; //
+                            var h = parseInt(o.options.font);
+                            ctx.font = o.options.font;
                             ctx.fillStyle = o.options.fill || "grey";
                             ctx.textAlign = o.options.align || "left";
-                            ctx.textAlign = "center";
-                            ctx.fillText(o.text, x, y);
+                            var w = ctx.measureText(o.text).width;
+                            //TODO : cache this, don't need to calc everytime
+                            ctx.fillText(o.text, x+w*o.anchor.x, y+12);
                         }
                     }
                 }
@@ -354,12 +353,7 @@ this.PIXI = this.PIXI || {};
         // ----- HELPERS ---------------
         // ----------------------------
         var useTouch = function () {
-            try {
-                document.createEvent("TouchEvent");
-                return true;
-            } catch (e) {
-                return false;
-            }
+            return !!('ontouchstart' in window) || !!('onmsgesturechange' in window);
         };
 
         var genericObject = function () {
