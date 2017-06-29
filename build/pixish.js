@@ -19,7 +19,8 @@ this.PIXI = this.PIXI || {};
             mouseDownX,
             mouseDownY,
             mouseUpX,
-            mouseUpY;
+            mouseUpY,
+            oldChildren;
 
         // ------------- constants -------------
         var TO_RADIANS = Math.PI/180;
@@ -40,19 +41,18 @@ this.PIXI = this.PIXI || {};
             if (useTouch()) {
                 document.addEventListener('touchstart', onmousedown);
                 document.addEventListener('touchend', onmouseup);
-                //document.addEventListener('touchmove', _this.dotouchmove);
+                document.addEventListener('touchmove', onmousemove);
             } else {
-                canvas.onmousedown = function(e){
-                    onmousedown(e);
-                }
-                canvas.onmouseup = function(e){
-                    onmouseup(e);
-                }
+                canvas.onmousedown = onmousedown;
+                canvas.onmouseup = onmouseup;
+                canvas.onmousemove = onmousemove;
             }
+
+            var s = new Container();
 
             return {
                 view        : canvas,
-                stage       : new Container(),
+                stage       : s,
                 ticker      : new Ticker(),
                 render      : redraw
             }
@@ -60,7 +60,7 @@ this.PIXI = this.PIXI || {};
 
         var Container = function() {
             var container = Object.assign(genericObject(),{
-                    type            : 'container',
+                    _type            : 'container',
                     children        : [],
                     addChild        : addChild,
                     removeChild     : removeChild,
@@ -72,9 +72,18 @@ this.PIXI = this.PIXI || {};
         };
 
         var Sprite = function(texture) {
+            if (!texture){
+                return null;
+            }
+            var w = texture.width;
+            var h = texture.height;
             return Object.assign(genericObject(),{
-                    type        : 'sprite',
-                    texture     : texture
+                    _type           : 'sprite',
+                    texture         : texture,
+                    width           : w,
+                    height          : h,
+                    naturalWidth    : w,
+                    naturalHeight   : h
                 }
             );
         };
@@ -98,7 +107,7 @@ this.PIXI = this.PIXI || {};
 
         var Point = function(x, y) {
             return {
-                type        : 'point',
+                _type       : 'point',
                 x           : x,
                 y           : y
             }
@@ -106,7 +115,7 @@ this.PIXI = this.PIXI || {};
 
         var Rectangle = function(x, y, w, h) {
             return {
-                type        : 'rectangle',
+                _type       : 'rectangle',
                 x           : x,
                 y           : y,
                 w           : w,
@@ -116,7 +125,7 @@ this.PIXI = this.PIXI || {};
 
         var Graphics = function() {
             return Object.assign(genericObject(),{
-                    type        : 'graphic',
+                    _type       : 'graphic',
                     beginFill   : function(data){},
                     drawRect    : function(data){},
                     endFill     : function(data){}
@@ -126,7 +135,7 @@ this.PIXI = this.PIXI || {};
 
         var Text = function(txt, options) {
             return Object.assign(genericObject(),{
-                    type        : 'text',
+                    _type       : 'text',
                     text        : txt,
                     options     : Object.assign({}, options),
                 }
@@ -156,7 +165,7 @@ this.PIXI = this.PIXI || {};
         }
 
         var removeChild = function(o) {
-            if (o.type == "container"){
+            if (o._type == "container"){
                 o.children = [];
             }
             this.children.splice(this.children.indexOf(o), 1);
@@ -164,39 +173,53 @@ this.PIXI = this.PIXI || {};
 
         var removeAll = function() {
             this.children = [];
+            containerList.forEach(function(c) {
+                c.children = [];
+            })
         }
 
         var onmousedown = function (evt) {
-            if (!evt) {
-                evt = window.event;
-            }
             var p = getMousePosition(evt);
             mouseDownX = p.x;
             mouseDownY = p.y;
             mouseDown  = true;
-            var children = getChildrenAtCoord(mouseDownX, mouseDownY);
-            for (var i in children){
-                if (children[i].mousedown){
-                    children[i].mousedown(children[i]);
+            getChildrenAtCoord(mouseDownX, mouseDownY).forEach(function(c){
+                if (c.mousedown){
+                    c.mousedown(c);
                 }
-            }
+            })
         };
 
         var onmouseup = function (evt) {
-            if (!evt) {
-                evt = window.event;
-            }
             var p = getMousePosition(evt);
             mouseUpX = p.x;
             mouseUpY = p.y;
             mouseDown  = true;
-            var children = getChildrenAtCoord(mouseUpX, mouseUpY);
-            for (var i in children){
-                if (children[i].mouseup){
-                    children[i].mouseup(children[i]);
+            getChildrenAtCoord(mouseUpX, mouseUpY).forEach(function(c){
+                if (c.mouseup){
+                    c.mouseup(c);
                 }
-            }
+            })
         }
+
+        var onmousemove = function (evt) {
+            var p = getMousePosition(evt);
+            var children = getChildrenAtCoord(p.x, p.y);
+            children.forEach(function(c){
+                if (c.mouseover && !c.mouseOverActive){
+                    c.mouseover(c);
+                    c.mouseOverActive = true;
+                }
+            })
+            var orphans = (oldChildren || []).filter(function(x) { return children.indexOf(x) < 0 });
+            orphans.forEach(function(c){
+                if (c.mouseout && c.mouseOverActive){
+                    c.mouseout(c);
+                    c.mouseOverActive = false;
+                }
+            })
+            oldChildren = children;
+        };
 
         var getChildrenAtCoord = function (x, y) {
             var arr = [];
@@ -245,40 +268,55 @@ this.PIXI = this.PIXI || {};
 
         var redraw = function() {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
-            for (var c in containerList){
+            for (var c=0; c<containerList.length; c++){
                 var container = containerList[c];
-                for (var i in container.children) {
+                for (var i=0; i<container.children.length; i++){
                     var o = container.children[i];
-                    if (container.children[i]){
+                    if (o && o.scale){
                         var x = (o.x || o.position.x) + (container.x || container.position.x);
                         var y = (o.y || o.position.y) + (container.y || container.position.y);
                         var r = o.rotation + (container.rotation || 0)*TO_DEGREES;
+
                         var w = o.width || (o.texture ? o.texture.width : 0)
-                            * (o.scale.x || 1)
-                            * (container.scale.x || 1)
-                            * (container.width ? container.width/(o.width || o.texture.width) : 1);
+                        w *= (o.scale.x || 1)
+                        w *= (container.scale.x || 1)
+                        w *= (container.width ? container.width/(o.width || o.texture.width) : 1);
+
+                        // parent container explicit size rules!
+                        if (container.width){
+                            w = container.width;
+                        }
 
                         var h = o.height || (o.texture ? o.texture.height : 0)
-                            * (o.scale.y || 1)
-                            * (container.scale.y || 1)
-                            * (container.height ? container.height/(o.height || o.texture.height) : 1);
+                        h *= (o.scale.y || 1)
+                        h *= (container.scale.y || 1)
+                        h *= (container.height ? container.height/(o.height || o.texture.height) : 1);
+
+                        // parent container explicit size rules!
+                        if (container.height){
+                            h = container.height;
+                        }
+
                         var alpha = container.alpha * o.alpha;
                         o.___x = x;
                         o.___y = y;
                         o.___w = w;
                         o.___h = h;
-                        if (o.type == "sprite") {
+                        if (o._type == "sprite") {
                             if (o.texture) {
                                 drawRotatedImage(o, x, y, w, h, r, alpha);
                             }
-                        } else if (o.type == "text") {
+                        } else if (o._type == "text") {
                             var h = parseInt(o.options.font);
                             ctx.font = o.options.font;
                             ctx.fillStyle = o.options.fill || "grey";
                             ctx.textAlign = o.options.align || "left";
                             var w = ctx.measureText(o.text).width;
-                            //TODO : cache this, don't need to calc everytime
-                            ctx.fillText(o.text, x+w*o.anchor.x, y+12);
+
+                            //TODO : remove magic number 12
+                            ctx.fillText(o.text,
+                                x - (w*o.anchor.x),
+                                y+12);
                         }
                     }
                 }
@@ -314,7 +352,7 @@ this.PIXI = this.PIXI || {};
         
         var loadSingle = function (){
             var d = loadarr.pop();
-            window[d.name] = new Image();
+            window[d.name] = Texture.fromImage(d.url);
             window[d.name].onload = function(evt) {
                 if (loadarr.length>0){
                     onProgress({progress:loadarr.length}); // needs progress
@@ -331,7 +369,6 @@ this.PIXI = this.PIXI || {};
                     onComplete(evt);
                 }
             };
-            window[d.name].src = d.url;
         };
 
         var loader = {
@@ -353,7 +390,8 @@ this.PIXI = this.PIXI || {};
         // ----- HELPERS ---------------
         // ----------------------------
         var useTouch = function () {
-            return !!('ontouchstart' in window) || !!('onmsgesturechange' in window);
+            var t = 'touchstart' in window;
+            return t;
         };
 
         var genericObject = function () {
