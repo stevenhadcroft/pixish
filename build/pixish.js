@@ -10,6 +10,11 @@ this.PIXI = this.PIXI || {};
 
         // ------------- vars -------------
         // needs : BASE_WIDTH, BD.canvasWidth, BD.SCALE
+        // ------------- constants -------------
+        // var TO_RADIANS = Math.PI/180;
+        // var TO_DEGREES = 180/Math.PI;
+
+
         var globalScale = BD ? BD.SCALE || 1 : 1;
         var containerList = [];
         var ctx,
@@ -22,9 +27,6 @@ this.PIXI = this.PIXI || {};
             mouseUpY,
             oldChildren;
 
-        // ------------- constants -------------
-        var TO_RADIANS = Math.PI/180;
-        var TO_DEGREES = 180/Math.PI;
 
         // ------------- constructors -------------
         var Application = function(w, h, options) {
@@ -73,7 +75,7 @@ this.PIXI = this.PIXI || {};
 
         var Sprite = function(texture) {
             if (!texture){
-                return null;
+                return genericObject(); //null;
             }
             var w = texture.width;
             var h = texture.height;
@@ -93,9 +95,9 @@ this.PIXI = this.PIXI || {};
                 asset.bounds = bounds;
                 return asset;
             } else {
-                var asset = Texture.fromImage(asset);
-                asset.bounds = bounds;
-                return asset;
+                var a = Texture.fromImage(asset);
+                a.bounds = bounds;
+                return a;
             }
         };
 
@@ -162,21 +164,24 @@ this.PIXI = this.PIXI || {};
         var addChild = function(o) {
             this.children.push(o);
             return o;
-        }
+        };
 
         var removeChild = function(o) {
+            if (!o){
+                return false;
+            }
             if (o._type == "container"){
                 o.children = [];
             }
             this.children.splice(this.children.indexOf(o), 1);
-        }
+        };
 
         var removeAll = function() {
             this.children = [];
             containerList.forEach(function(c) {
                 c.children = [];
             })
-        }
+        };
 
         var onmousedown = function (evt) {
             var p = getMousePosition(evt);
@@ -200,7 +205,7 @@ this.PIXI = this.PIXI || {};
                     c.mouseup(c);
                 }
             })
-        }
+        };
 
         var onmousemove = function (evt) {
             var p = getMousePosition(evt);
@@ -210,14 +215,14 @@ this.PIXI = this.PIXI || {};
                     c.mouseover(c);
                     c.mouseOverActive = true;
                 }
-            })
+            });
             var orphans = (oldChildren || []).filter(function(x) { return children.indexOf(x) < 0 });
             orphans.forEach(function(c){
                 if (c.mouseout && c.mouseOverActive){
                     c.mouseout(c);
                     c.mouseOverActive = false;
                 }
-            })
+            });
             oldChildren = children;
         };
 
@@ -240,11 +245,14 @@ this.PIXI = this.PIXI || {};
                         }
                     }
                 })
-            })
+            });
             return arr;
         };
 
         var getMousePosition = function (evt) {
+            var left = canvas.offsetLeft || 0;
+            var top = canvas.offsetTop || 0;
+
             var xsc = BASE_WIDTH/BD.canvasWidth;
             var ysc = BASE_HEIGHT/BD.canvasHeight;
             var x;
@@ -252,17 +260,11 @@ this.PIXI = this.PIXI || {};
             if (useTouch()) {
                 x    = evt.targetTouches[0].clientX/globalScale*xsc;
                 y    = evt.targetTouches[0].clientY/globalScale*ysc; // - $(window).scrollTop();
-                return {
-                    x: x,
-                    y: y
-                };
+                return {x: x-left, y: y-top};
             } else {
                 x    = (evt.clientX)/globalScale*xsc;
                 y    = (evt.clientY)/globalScale*ysc;
-                return {
-                    x: x,
-                    y: y
-                }
+                return {x: x-left, y: y-top};
             }
         };
 
@@ -307,21 +309,80 @@ this.PIXI = this.PIXI || {};
                                 drawRotatedImage(o, x, y, w, h, r, alpha);
                             }
                         } else if (o._type == "text") {
-                            var h = parseInt(o.options.font);
+                            var h = parseInt(o.options.font) || 16;
                             ctx.font = o.options.font;
                             ctx.fillStyle = o.options.fill || "grey";
                             ctx.textAlign = o.options.align || "left";
                             var w = ctx.measureText(o.text).width;
+                            var totalh = measureHeight(ctx, o.text, o.options.wordWrapWidth, h);
 
                             //TODO : remove magic number 12
-                            ctx.fillText(o.text,
-                                x - (w*o.anchor.x),
-                                y+12);
+                            // if (o.options.align === "center"){
+                            //     ctx.fillText(o.text, x, y+12);
+                            // } else if (o.options.align === "left"){
+                            //     ctx.fillText(o.text, x - (w*o.anchor.x), y+12);
+                            // }
+
+                            if (o.options.align === "center"){
+                                wrapText(ctx, o.text, x, y+6-((1-o.anchor.y)*totalh)+h/2, o.options.wordWrapWidth, h);
+                            } else if (o.options.align === "left"){
+                                wrapText(ctx, o.text, x - (w*o.anchor.x), y+6-((1-o.anchor.y)*totalh)+h/2, o.options.wordWrapWidth, h);
+                            } else {
+                                //ctx.fillText(o.text, x - (w*o.anchor.x), y+12);
+                            }
+
                         }
                     }
                 }
             }
         };
+
+        // http: //www.html5canvastutorials.com/tutorials/html5-canvas-wrap-text-tutorial/
+        function wrapText(context, text, x, y, maxWidth, lineHeight) {
+            var cars = String(text).split("\n");
+            for (var ii = 0; ii < cars.length; ii++) {
+                var line = "";
+                var words = cars[ii].split(" ");
+                for (var n = 0; n < words.length; n++) {
+                    var testLine = line + words[n] + " ";
+                    var metrics = context.measureText(testLine);
+                    var testWidth = metrics.width;
+                    if (testWidth > maxWidth) {
+                        context.fillText(line, x, y);
+                        line = words[n] + " ";
+                        y += lineHeight;
+                    }
+                    else {
+                        line = testLine;
+                    }
+                }
+                context.fillText(line, x, y);
+                y += lineHeight;
+            }
+        }
+
+        function measureHeight(context, text, maxWidth, lineHeight) {
+            var y = 0;
+            var cars = String(text).split("\n");
+            for (var ii = 0; ii < cars.length; ii++) {
+                var line = "";
+                var words = cars[ii].split(" ");
+                for (var n = 0; n < words.length; n++) {
+                    var testLine = line + words[n] + " ";
+                    var metrics = context.measureText(testLine);
+                    var testWidth = metrics.width;
+                    if (testWidth > maxWidth) {
+                        line = words[n] + " ";
+                        y += lineHeight;
+                    } else {
+                        line = testLine;
+                    }
+                }
+                y += lineHeight;
+            }
+            return y;
+        }
+
 
         var drawRotatedImage = function(obj, x, y, w, h, angle, alpha){
             if (obj.texture && w && h){
@@ -389,10 +450,7 @@ this.PIXI = this.PIXI || {};
         // ----------------------------
         // ----- HELPERS ---------------
         // ----------------------------
-        var useTouch = function () {
-            var t = 'touchstart' in window;
-            return t;
-        };
+
 
         var genericObject = function () {
             return {
